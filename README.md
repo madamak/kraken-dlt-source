@@ -1,4 +1,4 @@
-# Kraken Futures DLT Source
+# Kraken REST API DLT Source
 
 ![Python Version](https://img.shields.io/badge/python-3.12+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
