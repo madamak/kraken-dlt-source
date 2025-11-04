@@ -1,0 +1,15 @@
+{
+  "elements": [
+    {
+      "event": {
+        "PositionUpdate": {
+          "uid": "abc",
+          "executionUid": "xyz",
+          "timestamp": 1700000000000,
+          "size": "1.25"
+        }
+      }
+    }
+  ],
+  "continuationToken": null
+}

@@ -1,0 +1,19 @@
+{
+  "elements": [
+    {
+      "uid": "1e1a1c51-aaa1-4abb-b8ea-a2b0c37d7e01",
+      "timestamp": 1700000000000,
+      "takerOrder": {
+        "timestamp": 1700000000000
+      }
+    },
+    {
+      "uid": "7b0825ba-5a1d-47ce-9ced-0cf84f36e217",
+      "timestamp": 1700000100000,
+      "trade": {
+        "timestamp": 1700000100000
+      }
+    }
+  ],
+  "continuationToken": "token-1"
+}

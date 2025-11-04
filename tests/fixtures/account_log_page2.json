@@ -1,0 +1,10 @@
+{
+  "accountLog": [
+    {
+      "booking_uid": "993d0a40-6b70-4da7-8557-3cf7d7882222",
+      "timestamp": 1699999999000,
+      "asset": "usd"
+    }
+  ],
+  "continuationToken": null
+}

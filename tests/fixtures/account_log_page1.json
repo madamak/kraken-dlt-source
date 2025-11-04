@@ -1,0 +1,15 @@
+{
+  "accountLog": [
+    {
+      "booking_uid": "f1d0ea2d-1728-43fe-80e4-0e8df5f0b000",
+      "timestamp": 1700000000000,
+      "asset": "usd"
+    },
+    {
+      "booking_uid": "1a1338ce-5b15-4a3b-8c4d-65d584651111",
+      "date": "2023-11-04T00:16:40Z",
+      "asset": "usd"
+    }
+  ],
+  "continuationToken": null
+}

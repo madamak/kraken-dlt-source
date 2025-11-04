@@ -1,0 +1,14 @@
+{
+  "tickers": [
+    {
+      "symbol": "PI_XBTUSD",
+      "bid": "42000",
+      "markPrice": "42100"
+    },
+    {
+      "symbol": "PI_ETHUSD",
+      "bid": "3100",
+      "markPrice": "3120"
+    }
+  ]
+}

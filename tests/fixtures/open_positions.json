@@ -1,0 +1,10 @@
+{
+  "openPositions": [
+    {
+      "symbol": "PF_XBTUSD",
+      "side": "long",
+      "size": 1.5,
+      "fillTime": "2024-01-01T00:00:00Z"
+    }
+  ]
+}

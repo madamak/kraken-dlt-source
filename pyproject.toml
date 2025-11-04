@@ -1,0 +1,32 @@
+[project]
+name = "kraken-dlt-source"
+version = "0.1.0"
+description = "Incremental dlt connector for Kraken REST API with support for executions, account log, and position history"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "dlt[duckdb]>=1.18.2",
+    "requests>=2.32.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[project.urls]
+Homepage = "https://github.com/madamak/kraken-dlt-source"
+Repository = "https://github.com/madamak/kraken-dlt-source"
+Documentation = "https://github.com/madamak/kraken-dlt-source#readme"
+Issues = "https://github.com/madamak/kraken-dlt-source/issues"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "requests-mock>=1.12.1",
+]
