@@ -9,6 +9,7 @@ import dlt
 
 from kraken_dlt_source import kraken_futures_source
 from kraken_dlt_source.futures.resources import ALL_RESOURCE_NAMES
+from kraken_dlt_source.futures.helpers import BACKFILL_PAGE_SIZE
 
 
 LOGGER = logging.getLogger(__name__)
@@ -114,7 +115,6 @@ def main(argv: Sequence[str] | None = None) -> None:
     # Determine page size: explicit --page-size > --backfill mode > default
     page_size = args.page_size
     if page_size is None and args.backfill:
-        from kraken_dlt_source.futures.resources import BACKFILL_PAGE_SIZE
         page_size = BACKFILL_PAGE_SIZE
         LOGGER.info("Backfill mode enabled: using page_size=%d for optimal throughput", page_size)
 

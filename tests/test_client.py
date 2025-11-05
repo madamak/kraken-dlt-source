@@ -5,7 +5,7 @@ import pytest
 from requests import exceptions as requests_exceptions
 
 from kraken_dlt_source.futures.auth import KrakenFuturesAuth
-from kraken_dlt_source.futures.resources import KrakenFuturesClient
+from kraken_dlt_source.futures.client import KrakenFuturesClient
 
 
 class StubResponse:
@@ -51,8 +51,8 @@ def test_client_retries_on_rate_limit(monkeypatch):
     ]
     client = make_client(responses)
 
-    monkeypatch.setattr("kraken_dlt_source.futures.resources.time.sleep", lambda _: None)
-    monkeypatch.setattr("kraken_dlt_source.futures.resources.random.uniform", lambda *_: 0)
+    monkeypatch.setattr("kraken_dlt_source.futures.client.time.sleep", lambda _: None)
+    monkeypatch.setattr("kraken_dlt_source.futures.client.random.uniform", lambda *_: 0)
 
     payload = client.get("/derivatives/api/v3/tickers")
     assert payload["tickers"] == []
@@ -70,8 +70,8 @@ def test_client_raises_after_retries(monkeypatch):
     ]
     client = make_client(responses, max_retries=2)
 
-    monkeypatch.setattr("kraken_dlt_source.futures.resources.time.sleep", lambda _: None)
-    monkeypatch.setattr("kraken_dlt_source.futures.resources.random.uniform", lambda *_: 0)
+    monkeypatch.setattr("kraken_dlt_source.futures.client.time.sleep", lambda _: None)
+    monkeypatch.setattr("kraken_dlt_source.futures.client.random.uniform", lambda *_: 0)
 
     with pytest.raises(RuntimeError) as exc:
         client.get("/api/history/v2/executions", private=False)
@@ -85,7 +85,7 @@ def test_private_requests_require_auth(monkeypatch):
     ]
     client = make_client(responses, auth=KrakenFuturesAuth("key", base64.b64encode(b"secret").decode("ascii")))
 
-    monkeypatch.setattr("kraken_dlt_source.futures.resources.time.sleep", lambda _: None)
+    monkeypatch.setattr("kraken_dlt_source.futures.client.time.sleep", lambda _: None)
     payload = client.get("/derivatives/api/v3/openpositions", private=True)
     assert payload["openPositions"] == []
     assert "APIKey" in client.session.calls[0]["headers"]
@@ -97,7 +97,7 @@ def test_client_detects_error_payload(monkeypatch):
     ]
     client = make_client(responses)
 
-    monkeypatch.setattr("kraken_dlt_source.futures.resources.time.sleep", lambda _: None)
+    monkeypatch.setattr("kraken_dlt_source.futures.client.time.sleep", lambda _: None)
 
     with pytest.raises(RuntimeError) as exc:
         client.get("/api/history/v2/executions")
@@ -112,7 +112,7 @@ def test_client_permission_denied_returns_empty(monkeypatch, caplog):
     api_secret = base64.b64encode(b"secret").decode("ascii")
     client = make_client(responses, auth=KrakenFuturesAuth("key", api_secret))
 
-    monkeypatch.setattr("kraken_dlt_source.futures.resources.time.sleep", lambda _: None)
+    monkeypatch.setattr("kraken_dlt_source.futures.client.time.sleep", lambda _: None)
     caplog.set_level(logging.WARNING, logger="kraken_dlt_source.futures.resources")
 
     payload = client.get("/api/history/v2/executions", private=True)

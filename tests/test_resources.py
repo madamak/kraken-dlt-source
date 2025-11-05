@@ -17,9 +17,9 @@ from kraken_dlt_source.futures.resources import (
     account_log,
     position_history,
     open_positions,
-    KrakenFuturesClient,
     tickers,
 )
+from kraken_dlt_source.futures.client import KrakenFuturesClient
 from kraken_dlt_source.futures.auth import KrakenFuturesAuth
 
 
@@ -203,7 +203,7 @@ def test_logging_records_counts(caplog):
         dev_mode=True,
     )
 
-    caplog.set_level(logging.INFO, logger="kraken_dlt_source.futures.resources")
+    caplog.set_level(logging.INFO, logger="kraken_dlt_source.futures.helpers")
     pipeline.run(resource)
 
     messages = [record.getMessage() for record in caplog.records]

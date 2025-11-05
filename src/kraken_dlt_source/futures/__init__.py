@@ -4,6 +4,7 @@ import dlt
 
 from .auth import KrakenFuturesAuth
 from . import resources
+from .helpers import DEFAULT_PAGE_SIZE
 
 
 @dlt.source(name="kraken_futures")
@@ -50,13 +51,13 @@ def kraken_futures_source(
     selected = set(resources_to_load or resources.ALL_RESOURCE_NAMES)
 
     if "executions" in selected:
-        yield resources.executions(auth=auth, start_timestamp=start_timestamp, page_size=page_size or resources.DEFAULT_PAGE_SIZE)
+        yield resources.executions(auth=auth, start_timestamp=start_timestamp, page_size=page_size or DEFAULT_PAGE_SIZE)
 
     if "account_log" in selected:
-        yield resources.account_log(auth=auth, start_timestamp=start_timestamp, page_size=page_size or resources.DEFAULT_PAGE_SIZE)
+        yield resources.account_log(auth=auth, start_timestamp=start_timestamp, page_size=page_size or DEFAULT_PAGE_SIZE)
 
     if "position_history" in selected:
-        yield resources.position_history(auth=auth, start_timestamp=start_timestamp, page_size=page_size or resources.DEFAULT_PAGE_SIZE)
+        yield resources.position_history(auth=auth, start_timestamp=start_timestamp, page_size=page_size or DEFAULT_PAGE_SIZE)
 
     if "tickers" in selected:
         yield resources.tickers()
