@@ -2,6 +2,7 @@
 
 ## Project Structure & Module Organization
 - Pipeline entry point: `pipelines/run_pipeline.py` — the main pipeline orchestration script.
+- For instructions on how to query DuckDB from this pipeline look at `documentation/duckdb/AGENTS.md`
 - Documentation lives under `documentation/plans/` (numbered plan files). Expand with endpoint notes, auth diagrams, and runbooks as they materialize.
 - Source package structure: `src/kraken_dlt_source/` is the unified package for all Kraken APIs:
   - `futures/` contains Futures API implementation (`auth.py`, `resources.py`, `__init__.py`)
