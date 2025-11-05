@@ -13,6 +13,7 @@ def kraken_futures_source(
     start_timestamp: Optional[str] = None,
     resources_to_load: Optional[Sequence[str]] = None,
     auth: Optional[KrakenFuturesAuth] = None,
+    page_size: Optional[int] = None,
 ) -> Iterable:
     """Assemble Kraken Futures REST resources for DLT.
 
@@ -37,6 +38,10 @@ def kraken_futures_source(
     auth:
         Optional pre-configured KrakenFuturesAuth instance. If provided, api_key
         and api_secret parameters are ignored.
+    page_size:
+        Number of records to fetch per API request. Defaults to 500.
+        For historical backfills, consider 5000 for optimal rate limit efficiency.
+        Maximum values: account_log=100000, executions/positions=5000+ (untested).
     """
 
     if auth is None and api_key and api_secret:
@@ -45,13 +50,13 @@ def kraken_futures_source(
     selected = set(resources_to_load or resources.ALL_RESOURCE_NAMES)
 
     if "executions" in selected:
-        yield resources.executions(auth=auth, start_timestamp=start_timestamp)
+        yield resources.executions(auth=auth, start_timestamp=start_timestamp, page_size=page_size or resources.DEFAULT_PAGE_SIZE)
 
     if "account_log" in selected:
-        yield resources.account_log(auth=auth, start_timestamp=start_timestamp)
+        yield resources.account_log(auth=auth, start_timestamp=start_timestamp, page_size=page_size or resources.DEFAULT_PAGE_SIZE)
 
     if "position_history" in selected:
-        yield resources.position_history(auth=auth, start_timestamp=start_timestamp)
+        yield resources.position_history(auth=auth, start_timestamp=start_timestamp, page_size=page_size or resources.DEFAULT_PAGE_SIZE)
 
     if "tickers" in selected:
         yield resources.tickers()

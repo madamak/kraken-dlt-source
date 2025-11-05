@@ -13,8 +13,12 @@ from requests import exceptions as requests_exceptions
 from .auth import KrakenFuturesAuth
 
 BASE_URL = "https://futures.kraken.com"
-DEFAULT_PAGE_SIZE = 500
-ACCOUNT_LOG_FALLBACK_CAP = 50
+
+# Page size optimization for historical backfills:
+# - account_log: max 100,000 but rate limits favor 5,000 (6 tokens vs 10)
+# - executions/position_history: max unknown, testing shows 5,000 works well
+DEFAULT_PAGE_SIZE = 500  # Conservative default for incremental syncs
+BACKFILL_PAGE_SIZE = 5000  # Optimized for historical backfills
 
 EXECUTION_TIMESTAMP_FIELDS = ("timestamp", "info.timestamp", "takerOrder.timestamp", "trade.timestamp")
 ACCOUNT_LOG_TIMESTAMP_FIELDS = ("timestamp", "date")
@@ -221,7 +225,21 @@ def _prepare_params(base_params: Optional[Mapping[str, Any]], since: Optional[in
     return params
 
 
-@dlt.resource(name="executions", primary_key="uid", write_disposition="append")
+@dlt.resource(
+    name="executions",
+    primary_key="uid",
+    write_disposition="append",
+    columns={
+        "event__execution__execution__order_data__fee_calculation_info__user_fee_discount_applied": {
+            "data_type": "double",
+            "nullable": True,
+        },
+        "event__execution__execution__order_data__fee_calculation_info__market_share_rebate_credited": {
+            "data_type": "double",
+            "nullable": True,
+        },
+    },
+)
 def executions(
     auth: Optional[KrakenFuturesAuth],
     start_timestamp: Optional[str] = None,
@@ -277,7 +295,16 @@ def executions(
         break
 
 
-@dlt.resource(name="account_log", primary_key="booking_uid", write_disposition="append")
+@dlt.resource(
+    name="account_log",
+    primary_key="booking_uid",
+    write_disposition="append",
+    columns={
+        "collateral": {"data_type": "double", "nullable": True},
+        "liquidation_fee": {"data_type": "double", "nullable": True},
+        "position_uid": {"data_type": "text", "nullable": True},
+    },
+)
 def account_log(
     auth: Optional[KrakenFuturesAuth],
     start_timestamp: Optional[str] = None,
@@ -292,12 +319,15 @@ def account_log(
 
     since = _initial_since(start_timestamp, state)
     token = state.get("continuation_token")
-    fallback_count = 0
     before = state.get("before")
 
     max_timestamp_seen = since
 
     records_emitted = 0
+
+    # Infinite loop detection: track recent 'before' values
+    seen_before_timestamps = []
+    max_before_history = 3  # Allow same timestamp to appear max 3 times
 
     while True:
         params = {"count": page_size}
@@ -314,6 +344,7 @@ def account_log(
             state["before"] = None
             if since:
                 state["last_timestamp"] = since
+            LOGGER.info("account_log: No more records returned by API")
             _log_resource_stats("account_log", records_emitted, state.get("last_timestamp"))
             break
 
@@ -336,20 +367,73 @@ def account_log(
             token = next_token
             state["continuation_token"] = next_token
             state["before"] = None
+            seen_before_timestamps.clear()  # Reset loop detection on continuation token
+            LOGGER.debug("account_log: Continuation token received, fetching next page")
             continue
 
         if max_timestamp_seen:
             state["last_timestamp"] = str(max_timestamp_seen)
         state["continuation_token"] = None
 
-        if len(logs) >= page_size and fallback_count < ACCOUNT_LOG_FALLBACK_CAP:
-            fallback_count += 1
+        # Check if we've reached the start timestamp
+        if since and timestamps:
+            earliest = min(ts for ts, _ in timestamps)
+            if earliest <= since:
+                LOGGER.info(
+                    "account_log: Reached start timestamp (since=%s, earliest=%s). Backfill complete.",
+                    _ms_to_iso(since),
+                    _ms_to_iso(earliest),
+                )
+                state["before"] = None
+                _log_resource_stats("account_log", records_emitted, state.get("last_timestamp"))
+                break
+
+        # Continue pagination if page is full
+        if len(logs) >= page_size:
             earliest = min(ts for ts, _ in timestamps) if timestamps else None
             if earliest:
+                # Detect infinite loop
+                seen_before_timestamps.append(earliest)
+                if len(seen_before_timestamps) > max_before_history:
+                    seen_before_timestamps.pop(0)
+
+                if len(seen_before_timestamps) == max_before_history and len(set(seen_before_timestamps)) == 1:
+                    LOGGER.warning(
+                        "account_log: Detected infinite loop at timestamp %s. "
+                        "Same timestamp returned %d times. Stopping pagination.",
+                        _ms_to_iso(earliest),
+                        max_before_history,
+                    )
+                    state["before"] = None
+                    _log_resource_stats("account_log", records_emitted, state.get("last_timestamp"))
+                    break
+
                 before = earliest
                 state["before"] = str(before)
                 token = None
+                LOGGER.debug(
+                    "account_log: Using fallback pagination, before=%s, records_so_far=%d",
+                    _ms_to_iso(earliest),
+                    records_emitted,
+                )
                 continue
+
+        # Log why we stopped
+        if timestamps:
+            earliest_in_page = min(ts for ts, _ in timestamps)
+            LOGGER.info(
+                "account_log: Pagination complete - last page was partial (%d < %d records). "
+                "Earliest timestamp reached: %s",
+                len(logs),
+                page_size,
+                _ms_to_iso(earliest_in_page),
+            )
+        else:
+            LOGGER.info(
+                "account_log: Pagination complete - last page was partial (%d < %d records)",
+                len(logs),
+                page_size,
+            )
 
         state["before"] = None
         _log_resource_stats("account_log", records_emitted, state.get("last_timestamp"))

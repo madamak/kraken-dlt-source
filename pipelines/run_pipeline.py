@@ -23,6 +23,7 @@ def run_pipeline(
     start_timestamp: str | None,
     dev_mode: bool,
     raise_on_failed: bool,
+    page_size: int | None = None,
 ) -> tuple[dlt.LoadInfo, Dict[str, Any]]:
     pipeline = dlt.pipeline(
         pipeline_name="kraken_futures",
@@ -31,7 +32,11 @@ def run_pipeline(
         dev_mode=dev_mode,
     )
 
-    source = kraken_futures_source(start_timestamp=start_timestamp, resources_to_load=resources)
+    source = kraken_futures_source(
+        start_timestamp=start_timestamp,
+        resources_to_load=resources,
+        page_size=page_size,
+    )
     load_info = pipeline.run(source)
     summary = _summarize_load(load_info)
     LOGGER.info(
@@ -83,6 +88,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Emit the load information as JSON for scripting.",
     )
+    parser.add_argument(
+        "--backfill",
+        action="store_true",
+        help="Enable backfill mode with optimized page size (5000 records/request for faster historical loads).",
+    )
+    parser.add_argument(
+        "--page-size",
+        type=int,
+        help="Override page size for API requests (default: 500, backfill: 5000). Max: account_log=100000, others=5000+.",
+    )
     return parser.parse_args(argv)
 
 
@@ -96,11 +111,19 @@ def main(argv: Sequence[str] | None = None) -> None:
             print(name)
         return
 
+    # Determine page size: explicit --page-size > --backfill mode > default
+    page_size = args.page_size
+    if page_size is None and args.backfill:
+        from kraken_dlt_source.futures.resources import BACKFILL_PAGE_SIZE
+        page_size = BACKFILL_PAGE_SIZE
+        LOGGER.info("Backfill mode enabled: using page_size=%d for optimal throughput", page_size)
+
     load_info, summary = run_pipeline(
         resources=args.resources,
         start_timestamp=args.start_timestamp,
         dev_mode=args.dev_mode,
         raise_on_failed=args.strict,
+        page_size=page_size,
     )
 
     if args.output_json:
