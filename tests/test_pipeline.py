@@ -57,6 +57,7 @@ def test_run_pipeline_summary(monkeypatch, tmp_path, capsys):
     class StubPipeline:
         def __init__(self, *args, **kwargs):
             self.job_path = job_file
+            self.pipeline_name = "stub"
 
         def run(self, _source):
             return StubLoadInfo(self.job_path)

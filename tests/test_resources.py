@@ -127,6 +127,35 @@ def test_all_resource_names_are_unique():
     assert sorted(set(ALL_RESOURCE_NAMES)) == sorted(ALL_RESOURCE_NAMES)
 
 
+def test_executions_includes_start_timestamp_on_first_run():
+    responses = iter(
+        [
+            load_fixture("executions_page1.json"),
+            load_fixture("executions_page2.json"),
+        ]
+    )
+    client = FakeClient(responses)
+
+    resource = executions(
+        auth=make_auth(),
+        start_timestamp="2023-11-14T22:13:20Z",
+        page_size=2,
+        client=client,
+    )
+    pipeline = dlt.pipeline(
+        pipeline_name="test_executions_seed",
+        destination="duckdb",
+        dataset_name="test_executions_seed",
+        dev_mode=True,
+    )
+
+    pipeline.run(resource)
+
+    with pipeline.sql_client() as sql:
+        count = sql.execute_sql("SELECT COUNT(*) FROM executions")[0][0]
+    assert count == 3
+
+
 def test_account_log_fallback_uses_before():
     responses = iter(
         [
@@ -156,6 +185,40 @@ def test_account_log_fallback_uses_before():
 
     state = pipeline.state["sources"]["test_account_log"]["resources"]["account_log"]
     assert state["last_timestamp"] == "1700000000000"
+
+
+def test_account_log_keeps_new_records_on_boundary_page():
+    page1 = {
+        "accountLog": [
+            {"booking_uid": "uid-newer", "timestamp": 1_700_000_005_000, "asset": "usd"},
+            {"booking_uid": "uid-boundary-a", "timestamp": 1_700_000_000_000, "asset": "usd"},
+            {"booking_uid": "uid-boundary-b", "timestamp": 1_700_000_000_000, "asset": "usd"},
+        ]
+    }
+    page2 = {
+        "accountLog": [
+            {"booking_uid": "uid-boundary-a", "timestamp": 1_700_000_000_000, "asset": "usd"},
+            {"booking_uid": "uid-boundary-c", "timestamp": 1_700_000_000_000, "asset": "usd"},
+        ]
+    }
+    responses = iter([page1, page2])
+    client = FakeClient(responses)
+
+    resource = account_log(auth=make_auth(), page_size=3, client=client)
+    pipeline = dlt.pipeline(
+        pipeline_name="test_account_log_boundary",
+        destination="duckdb",
+        dataset_name="test_account_log_boundary",
+        dev_mode=True,
+    )
+
+    pipeline.run(resource)
+
+    with pipeline.sql_client() as sql:
+        count = sql.execute_sql("SELECT COUNT(*) FROM account_log")[0][0]
+    # We keep the two unique boundary records, the newer record, and the
+    # replayed-but-new boundary record while skipping only the true duplicate.
+    assert count == 4
 
 
 def test_position_history_flattens_nested_events():

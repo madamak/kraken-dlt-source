@@ -249,12 +249,19 @@ def executions(
     state = dlt.current.resource_state()
     client = client or KrakenFuturesClient(auth=auth)
 
+    prior_last_timestamp = state.get("last_timestamp")
     since = _initial_since(start_timestamp, state)
     token = state.get("continuation_token")
 
     max_timestamp_seen = since
 
     records_emitted = 0
+
+    # Track initial state for duplicate prevention
+    # When resuming from state (no token), we skip records <= initial_since
+    # because the API's 'since' parameter is inclusive, causing re-ingestion
+    resumed_from_state = prior_last_timestamp is not None
+    initial_since = since if (resumed_from_state and since and not token) else None
 
     while True:
         params = _prepare_params({"count": page_size}, since, token)
@@ -274,6 +281,12 @@ def executions(
             timestamp_ms = _extract_timestamp(element, EXECUTION_TIMESTAMP_FIELDS)
             if timestamp_ms is None:
                 continue
+
+            # Skip records we've already seen when resuming from state
+            # The API's 'since' parameter is inclusive, so we filter client-side
+            if initial_since and timestamp_ms <= initial_since:
+                continue
+
             if not max_timestamp_seen or timestamp_ms > max_timestamp_seen:
                 max_timestamp_seen = timestamp_ms
             record = dict(element)
@@ -317,6 +330,7 @@ def account_log(
     state = dlt.current.resource_state()
     client = client or KrakenFuturesClient(auth=auth)
 
+    prior_last_timestamp = state.get("last_timestamp")
     since = _initial_since(start_timestamp, state)
     token = state.get("continuation_token")
     before = state.get("before")
@@ -324,6 +338,22 @@ def account_log(
     max_timestamp_seen = since
 
     records_emitted = 0
+
+    # Track initial state for duplicate prevention
+    # When resuming from state (no token), we skip records <= initial_since
+    # because the API's 'since' parameter is inclusive, causing re-ingestion
+    resumed_from_state = prior_last_timestamp is not None
+    initial_since = since if (resumed_from_state and since and not token) else None
+
+    # Track the last 'before' timestamp to prevent pagination duplicates
+    # The API's 'before' parameter is inclusive, so events at the boundary
+    # timestamp appear in both pages. We skip these on subsequent pages.
+    last_before_timestamp = _coerce_timestamp_ms(before) if before else None
+
+    boundary_booking_uids = set(state.get("boundary_booking_uids") or [])
+    if not last_before_timestamp:
+        boundary_booking_uids.clear()
+        state["boundary_booking_uids"] = []
 
     # Infinite loop detection: track recent 'before' values
     seen_before_timestamps = []
@@ -353,6 +383,22 @@ def account_log(
             timestamp_ms = _extract_timestamp(log, ACCOUNT_LOG_TIMESTAMP_FIELDS)
             if timestamp_ms is None:
                 continue
+
+            # Skip records we've already seen when resuming from state
+            # The API's 'since' parameter is inclusive, so we filter client-side
+            if initial_since and timestamp_ms <= initial_since:
+                continue
+
+            # Skip records we already emitted at the inclusive boundary.
+            booking_uid = log.get("booking_uid")
+            if (
+                last_before_timestamp is not None
+                and timestamp_ms == last_before_timestamp
+                and booking_uid
+                and booking_uid in boundary_booking_uids
+            ):
+                continue
+
             timestamps.append((timestamp_ms, log))
             if not max_timestamp_seen or timestamp_ms > max_timestamp_seen:
                 max_timestamp_seen = timestamp_ms
@@ -367,6 +413,9 @@ def account_log(
             token = next_token
             state["continuation_token"] = next_token
             state["before"] = None
+            last_before_timestamp = None  # Reset boundary tracking on continuation token
+            boundary_booking_uids.clear()
+            state["boundary_booking_uids"] = []
             seen_before_timestamps.clear()  # Reset loop detection on continuation token
             LOGGER.debug("account_log: Continuation token received, fetching next page")
             continue
@@ -374,6 +423,8 @@ def account_log(
         if max_timestamp_seen:
             state["last_timestamp"] = str(max_timestamp_seen)
         state["continuation_token"] = None
+        boundary_booking_uids.clear()
+        state["boundary_booking_uids"] = []
 
         # Check if we've reached the start timestamp
         if since and timestamps:
@@ -385,6 +436,8 @@ def account_log(
                     _ms_to_iso(earliest),
                 )
                 state["before"] = None
+                boundary_booking_uids.clear()
+                state["boundary_booking_uids"] = []
                 _log_resource_stats("account_log", records_emitted, state.get("last_timestamp"))
                 break
 
@@ -409,6 +462,13 @@ def account_log(
                     break
 
                 before = earliest
+                last_before_timestamp = earliest  # Track boundary to prevent duplicates
+                boundary_booking_uids = {
+                    log.get("booking_uid")
+                    for ts, log in timestamps
+                    if ts == earliest and log.get("booking_uid")
+                }
+                state["boundary_booking_uids"] = sorted(boundary_booking_uids)
                 state["before"] = str(before)
                 token = None
                 LOGGER.debug(
@@ -436,6 +496,8 @@ def account_log(
             )
 
         state["before"] = None
+        boundary_booking_uids.clear()
+        state["boundary_booking_uids"] = []
         _log_resource_stats("account_log", records_emitted, state.get("last_timestamp"))
         break
 
@@ -453,12 +515,19 @@ def position_history(
     state = dlt.current.resource_state()
     client = client or KrakenFuturesClient(auth=auth)
 
+    prior_last_timestamp = state.get("last_timestamp")
     since = _initial_since(start_timestamp, state)
     token = state.get("continuation_token")
 
     max_timestamp_seen = since
 
     records_emitted = 0
+
+    # Track initial state for duplicate prevention
+    # When resuming from state (no token), we skip records <= initial_since
+    # because the API's 'since' parameter is inclusive, causing re-ingestion
+    resumed_from_state = prior_last_timestamp is not None
+    initial_since = since if (resumed_from_state and since and not token) else None
 
     while True:
         params = _prepare_params({"count": page_size}, since, token)
@@ -490,6 +559,11 @@ def position_history(
 
             timestamp_ms = _extract_timestamp(normalized, POSITION_HISTORY_TIMESTAMP_FIELDS)
             if timestamp_ms is None:
+                continue
+
+            # Skip records we've already seen when resuming from state
+            # The API's 'since' parameter is inclusive, so we filter client-side
+            if initial_since and timestamp_ms <= initial_since:
                 continue
 
             if not max_timestamp_seen or timestamp_ms > max_timestamp_seen:
