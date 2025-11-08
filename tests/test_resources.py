@@ -74,6 +74,8 @@ class FakeClient(KrakenFuturesClient):
 def reset_pipeline_state(tmp_path, monkeypatch):
     # Each test uses an isolated .dlt folder to avoid state leakage.
     monkeypatch.setenv("DLT_DATA_DIR", str(tmp_path))
+    # Configure DuckDB to write database files to tmp_path as well
+    monkeypatch.setenv("DESTINATION__DUCKDB__CREDENTIALS", str(tmp_path / "test.duckdb"))
 
 
 def make_auth() -> KrakenFuturesAuth:
