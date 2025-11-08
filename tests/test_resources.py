@@ -74,6 +74,8 @@ class FakeClient(KrakenFuturesClient):
 def reset_pipeline_state(tmp_path, monkeypatch):
     # Each test uses an isolated .dlt folder to avoid state leakage.
     monkeypatch.setenv("DLT_DATA_DIR", str(tmp_path))
+    # Configure DuckDB to write database files to tmp_path as well
+    monkeypatch.setenv("DESTINATION__DUCKDB__CREDENTIALS", str(tmp_path / "test.duckdb"))
 
 
 def make_auth() -> KrakenFuturesAuth:
@@ -156,6 +158,40 @@ def test_account_log_fallback_uses_before():
 
     state = pipeline.state["sources"]["test_account_log"]["resources"]["account_log"]
     assert state["last_timestamp"] == "1700000000000"
+
+
+def test_account_log_keeps_new_records_on_boundary_page():
+    page1 = {
+        "accountLog": [
+            {"booking_uid": "uid-newer", "timestamp": 1_700_000_005_000, "asset": "usd"},
+            {"booking_uid": "uid-boundary-a", "timestamp": 1_700_000_000_000, "asset": "usd"},
+            {"booking_uid": "uid-boundary-b", "timestamp": 1_700_000_000_000, "asset": "usd"},
+        ]
+    }
+    page2 = {
+        "accountLog": [
+            {"booking_uid": "uid-boundary-a", "timestamp": 1_700_000_000_000, "asset": "usd"},
+            {"booking_uid": "uid-boundary-c", "timestamp": 1_700_000_000_000, "asset": "usd"},
+        ]
+    }
+    responses = iter([page1, page2])
+    client = FakeClient(responses)
+
+    resource = account_log(auth=make_auth(), page_size=3, client=client)
+    pipeline = dlt.pipeline(
+        pipeline_name="test_account_log_boundary",
+        destination="duckdb",
+        dataset_name="test_account_log_boundary",
+        dev_mode=True,
+    )
+
+    pipeline.run(resource)
+
+    with pipeline.sql_client() as sql:
+        count = sql.execute_sql("SELECT COUNT(*) FROM account_log")[0][0]
+    # We keep the two unique boundary records, the newer record, and the
+    # replayed-but-new boundary record while skipping only the true duplicate.
+    assert count == 4
 
 
 def test_position_history_flattens_nested_events():
